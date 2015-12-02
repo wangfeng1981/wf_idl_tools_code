@@ -11,7 +11,7 @@ FOR ifile = 0,num-1  DO begin
   fidsArray[ifile] = fid 
 ENDFOR
 
-OPENW, 1, files[0]+'.out'
+OPENW, 1, files[0]+'.out' 
 
 ENVI_FILE_QUERY, fidsArray[0] , dims=dims
 dimsrow = dims
@@ -25,7 +25,7 @@ for iline = 0 , numline do begin
     for ifile = 0 , num-1 do begin
         data1 = ENVI_GET_DATA(fid= fidsArray[ifile] , dims=dimsrow, pos=0)
         for is = 0 , dims[2] do begin
-          if( data1[is] NE !VALUES.F_NAN ) then begin
+          if( finite(data1[is]) EQ 1 ) then begin
             data[is] = data[is] + data1[is]
             datanum[is] = datanum[is]+1
           endif
