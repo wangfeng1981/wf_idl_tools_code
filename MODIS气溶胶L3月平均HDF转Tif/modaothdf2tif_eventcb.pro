@@ -1,0 +1,258 @@
+;
+; IDL Event Callback Procedures
+; modaothdf2tif_eventcb
+;
+; Generated on:	07/28/2015 15:58.49
+;
+;
+; Empty stub procedure used for autoloading.
+;
+pro modaothdf2tif_eventcb
+end
+;-----------------------------------------------------------------
+; Activate Button Callback Procedure.
+; Argument:
+;   Event structure:
+;
+;   {WIDGET_BUTTON, ID:0L, TOP:0L, HANDLER:0L, SELECT:0}
+;
+;   ID is the widget ID of the component generating the event. TOP is
+;       the widget ID of the top level widget containing ID. HANDLER
+;       contains the widget ID of the widget associated with the
+;       handler routine.
+
+;   SELECT is set to 1 if the button was set, and 0 if released.
+;       Normal buttons do not generate events when released, so
+;       SELECT will always be 1. However, toggle buttons (created by
+;       parenting a button to an exclusive or non-exclusive base)
+;       return separate events for the set and release actions.
+
+;   Retrieve the IDs of other widgets in the widget hierarchy using
+;       id=widget_info(Event.top, FIND_BY_UNAME=name)
+
+;-----------------------------------------------------------------
+pro ON_OPEN_HDF, Event
+
+	files = DIALOG_PICKFILE(/READ, FILTER = '*.hdf',TITLE='select hdf files',/MULTIPLE_FILES )
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_LIST_0')
+	WIDGET_CONTROL ,id , set_value=files
+	WIDGET_CONTROL ,id , SET_UVALUE=files
+
+	file1 = files[0]
+	if( file1 eq '' ) then return
+	sdid = HDF_SD_START( file1 , /READ )
+
+	nds = 0
+	nat = 0
+	HDF_SD_FILEINFO, sdid , nds, nat
+
+	dsArray = STRARR(nds)
+	for i =0 , nds-1 do begin
+		dataset_id = HDF_SD_SELECT(sdid, i)
+		dataset_name = ''
+		HDF_SD_GETINFO, dataset_id ,LABEL=dataset_name
+		dsArray[i] = dataset_name
+	endfor
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_DROPLIST_DS')
+	WIDGET_CONTROL ,id , set_value=dsArray
+
+	HDF_SD_END, sdid
+end
+
+;;
+pro onImportFromTxt, Event
+
+	file1 = DIALOG_PICKFILE(/READ, FILTER = '*.txt',TITLE='import filepaths.' )
+	file1 = file1[0]
+	if( file1 eq '' ) then return
+
+	files = strarr(5000)
+	num = 0
+	OPENR, 1,  file1
+	line = ''
+	WHILE ~ EOF(1) DO BEGIN
+	   READF, 1, line
+	   if( line ne '' ) then begin
+	   		files[num] = line
+	   		num = num+1
+	   endif
+
+	ENDWHILE
+	FREE_LUN, 1
+
+	files = files[0:num-1]
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_LIST_0')
+	WIDGET_CONTROL ,id , set_value=files
+	WIDGET_CONTROL ,id , SET_UVALUE=files
+
+	file1 = files[0]
+	if( file1 eq '' ) then return
+	sdid = HDF_SD_START( file1 , /READ )
+
+	nds = 0
+	nat = 0
+	HDF_SD_FILEINFO, sdid , nds, nat
+
+	dsArray = STRARR(nds)
+	for i =0 , nds-1 do begin
+		dataset_id = HDF_SD_SELECT(sdid, i)
+		dataset_name = ''
+		HDF_SD_GETINFO, dataset_id ,LABEL=dataset_name
+		dsArray[i] = dataset_name
+	endfor
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_DROPLIST_DS')
+	WIDGET_CONTROL ,id , set_value=dsArray
+
+	HDF_SD_END, sdid
+end
+
+;-----------------------------------------------------------------
+pro ON_OK, Event
+compile_opt  idl2
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_DROPLIST_DS')
+	dsindex = WIDGET_INFO( id,/DROPLIST_SELECT )
+	print , "DS index Selected:" , dsindex
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_TEXT_TIF')
+	WIDGET_CONTROL ,id , get_value=outdir
+	outdir = outdir[0]
+	print , "Output directory:" , outdir
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_LIST_0')
+	WIDGET_CONTROL ,id , GET_UVALUE=files
+	numfiles = N_ELEMENTS(files)
+
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_TEXT_SN')
+	WIDGET_CONTROL ,id , GET_VALUE=grid_name
+	grid_name = grid_name[0]
+
+	dsNameArray = hdfsdnames(files[0])
+	dsname = dsNameArray[dsindex]
+
+	for i = 0 , numfiles-1 do begin
+
+		print ,"input:"+files[i]
+		infname =   files[i]
+
+		binfname = byte(infname)
+		adot = byte('.')
+		wh = where( binfname EQ adot[0] , whcnt )
+		outfname = infname + '.tif'
+		if whcnt GE 4 then begin
+			i4 = wh[whcnt-1]
+			i3 = wh[whcnt-2]
+			i2 = wh[whcnt-3]
+			i1 = wh[whcnt-4]
+			slen = strlen(infname)
+
+			;;;MOD08_M3.A2007001.006.2014363160225.hdf
+			part1 = strmid( infname , 0 , i1 )  ;;;MOD04_L3
+			part2 = strmid( infname , i1+1 , i2-i1 ) ;;;A2014152
+			part21 = strmid( part2 , 0 , 1)          ;;;A
+			part22 = strmid( part2 , 1 )
+			part3 = strmid( infname , i2+1 , i3-i2 ) ;;;0300
+			jday2mday , part22 ,outYear, outMon , outDay
+			syear = int2str(outYear)
+			smonth =int2str(outMon)
+			sday  = int2str(outDay)
+			if( outMon LT 10 ) then begin
+				smonth = '0'+smonth
+			endif
+			if( outDay LT 10 ) then begin
+				sday   = '0'+sday
+			endif
+			outfname = part1+"."+part21+"."+syear+smonth+sday+"."+part3
+		endif
+		baseOutfname =  FILE_BASENAME( outfname ,"hdf")
+		baseOutfname = strmid( baseOutfname , 0 , strlen(baseOutfname)-1 )
+		outfname = outdir + baseOutfname
+		outtifname = outdir + baseOutfname +'.tif'
+;		print , "output:"+outfname
+;		print , "outdir:"+outdir
+;		print , "outbase:"+baseOutfname
+;		print , "swath_name:"+swath_name
+
+
+		sdnames = strarr(1)
+		sdnames[0] = dsname
+		print , "sd_name:"+sdnames[0]
+		
+		out_ps = [1.0d,1.0d]
+
+		output_projection = envi_proj_create(/geographic)
+		CONVERT_MODIS_DATA, in_file=infname, $
+			out_path=outdir, out_root=baseOutfname, $
+			 ;;; swt_name=swath_name, $   ;;/higher_product, /swath,
+			 gd_name= grid_name , $
+			sd_names=sdnames , out_method=1, $
+			out_ps=out_ps,$
+			out_proj=output_projection, $ ;; num_x_pts=50, num_y_pts=50,$
+			interp_method=1, r_fid_array=r_fid_array,msg=msg
+
+		;fidarr = envi_get_file_ids()
+		fid1 = r_fid_array[0]
+		if( fid1 eq -1 ) then begin
+			print , "convert_modis_data error:"
+			print , msg
+			return
+		endif
+
+		ENVI_FILE_QUERY, fid1 , dims = dims
+;		print , fid1 , dims , outtifname
+;		print , 1
+		ENVI_OUTPUT_TO_EXTERNAL_FORMAT ,fid=fid1,dims=dims,out_name=outtifname,pos=[0], /TIFF
+;		print , 2
+		envi_file_mng, id=fid1, /remove, /delete
+		print , "finish" , (i+1) , numfiles
+	endfor
+
+	print , "All finished."
+end
+
+;-----------------------------------------------------------------
+pro ON_OPEN_OUTTIF, Event
+	outdir = DIALOG_PICKFILE(TITLE='out path', /DIRECTORY ,PATH='D:\')
+	id=widget_info(Event.top, FIND_BY_UNAME='WID_TEXT_TIF')
+	WIDGET_CONTROL ,id , set_value=outdir
+end
+
+pro jday2mday , jday ,outYear, outMon , outDay
+
+	year = Fix(StrMid(StrTrim(jday,2), 0, 4))
+	dayOfYear = Fix(StrMid(StrTrim(jday,2), 4, 3))
+	CALDAT, JULDAY(1, dayofyear, year), month, day
+
+	outYeaR = Year
+	outMon = month
+	outDay = day
+
+end
+
+function int2str , ival
+	return , strtrim(string(ival),2)
+end
+
+function hdfsdnames , hdfFile
+
+	sdid = HDF_SD_START( hdfFile , /READ )
+
+	nds = 0
+	nat = 0
+	HDF_SD_FILEINFO, sdid , nds, nat
+
+	dsArray = STRARR(nds)
+	for i =0 , nds-1 do begin
+		dataset_id = HDF_SD_SELECT(sdid, i)
+		dataset_name = ''
+		HDF_SD_GETINFO, dataset_id , NAME=dataset_name
+		dsArray[i] = dataset_name
+	endfor
+	HDF_SD_END, sdid
+	return , dsArray
+end;-----------------------------------------------------------------
+
