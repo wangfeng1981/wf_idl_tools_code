@@ -1,41 +1,35 @@
 pro modis_aod2pm25
-;通过modis 气溶胶光学厚度aod月平均或者年平均数据计算pm2.5 pm25
+; convert tif modis aod month L3 data to tif pm25 data
+;jfwf@yeah.net 20160516
 
-;y = ax+b 微克每立方米
-a = 57.232
-b = 1.4551
+a = 79.33
+b = 16.33
 
-filters = [ '*.*' ]
+filters = [ '*.tif' ]
 files = DIALOG_PICKFILE( /MULTIPLE_FILES, /READ , TITLE='Input files' ,  FILTER = filters )
-if( files[0] eq '' ) then return 
+if( files[0] eq '' ) then return
 
-num = N_ELEMENTS(files) 
+num = N_ELEMENTS(files)
 
 for ifile = 0 , num-1 do Begin
   outfilename = files[ifile]+'.pm25'
+  outfilename2=  outfilename+"tif.tif"
   ENVI_OPEN_FILE, files[ifile], r_fid=fid
-  ENVI_FILE_QUERY, fid  , dims=dims
-  dimsrow = dims
-  numline = dims[4]
-  OPENW, 1, outfilename
-  
-  for iline = 0 , numline do begin
-    dimsrow[3] = iline
-    dimsrow[4] = iline
-    data = ENVI_GET_DATA(fid=fid , dims=dimsrow, pos=0)
-    for is = 0 , dims[2] do begin
-      if( data[is] GT 0.0 ) then begin
-        data[is] = data[is]*a+b
-      endif
-    endfor
+  ENVI_FILE_QUERY, fid  , dims=dims , ns=ns , nl=nl
+  t_fid = [fid]
+  pos  = [0]
+  expstr = 'b1*'+string(a)+'+'+string(b)
+  envi_doit, 'math_doit', $
+    fid=t_fid, pos=pos, dims=dims, $
+    exp=expstr, out_name=outfilename, $
+    r_fid=r_fid
 
-    WRITEU, 1, data
-  endfor
-  print , 'file:' , ifile , 'ok'
-  close , 1
-  
+  ENVI_OUTPUT_TO_EXTERNAL_FORMAT , DIMS=dims,fid=r_fid ,$
+    OUT_NAME= outfilename2,pos=[0],/TIFF
+  envi_file_mng, id=fid, /remove ;, /delete
+  envi_file_mng, id=r_fid, /remove, /delete
 endfor
 
-print , 'all finshed!' 
+print , 'all finshed!'
 
 end
